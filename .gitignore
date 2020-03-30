@@ -1,0 +1,6 @@
+# Ignore Files
+# *.zip
+# *.pdf
+*
+!*.py
+!*.gitignore
