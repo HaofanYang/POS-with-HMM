@@ -25,30 +25,17 @@ class POSTagger():
     log(P(the current word is word|the current tag is POS))
     '''
     def train(self, train_set):
-<<<<<<< HEAD
         # Construct index dicts
-=======
-        self.initial = np.zeros([0]) # Initial is a 1-D array
-        self.transition = np.zeros([0, 0]) # Transition is a 2-D matrix
-        self.emission = np.zeros([0, 0]) # Emission is a 2-D matrix
-
-        # iterate over training documents
->>>>>>> ce7a3ab1bc7583417d6572b4ced46ba3b1a2888f
         for root, dirs, files in os.walk(train_set):
             for name in files:
                 with open(os.path.join(root, name)) as f:
                     # Split the document into sentences
                     lines = f.readlines()
                 for line in lines:
-<<<<<<< HEAD
-=======
-                    prev_tag = None
->>>>>>> ce7a3ab1bc7583417d6572b4ced46ba3b1a2888f
                     tagged_tokens = line.split()
                     for pair in tagged_tokens:
                         # Split the pair by the last occurence of '/'
                         token, tag = pair.rsplit('/', 1)
-<<<<<<< HEAD
                         # Add indices for the current token and tag, if has not been added before
                         if not token in self.word_dict:
                             self.word_dict[token] = len(self.word_dict)
@@ -94,8 +81,6 @@ class POSTagger():
         self.transition = self.transition / self.transition.sum(axis = 1, keepdims = True)
         # Validate probabilities sum to one
         self.__validate_probabilities()
-=======
->>>>>>> ce7a3ab1bc7583417d6572b4ced46ba3b1a2888f
 
                         # Add indices for the current token and tag, if has not been added before
                         # When a new word/tag appears, we also need to add a new row/col to matrices
