@@ -81,45 +81,6 @@ class POSTagger():
         self.transition = self.transition / self.transition.sum(axis = 1, keepdims = True)
         # Validate probabilities sum to one
         self.__validate_probabilities()
-
-                        # Add indices for the current token and tag, if has not been added before
-                        # When a new word/tag appears, we also need to add a new row/col to matrices
-                        if not token in self.word_dict:
-                            self.word_dict[token] = len(self.word_dict)
-                            self.emission = np.append(self.emission, np.zeros([self.emission.shape[0], 1]), axis = 1) # Add a new col to emission
-                        if not tag in self.pos_dict:
-                            self.pos_dict[tag] = len(self.pos_dict)
-                            self.initial = np.append(self.initial, 0) # Added a place holder for new tag
-                            # Add a new col and row in transition
-                            self.transition = np.append(self.transition, np.zeros([1, self.transition.shape[1]]), axis = 0)
-                            self.transition = np.append(self.transition, np.zeros([self.transition.shape[0], 1]), axis = 1)
-                            self.emission = np.append(self.emission, np.zeros([1, self.emission.shape[1]]), axis = 0) # Add a new row in emission
-                        
-                        # Count emission, based on the pair
-                        cur_tag_ind = self.pos_dict[tag]
-                        cur_token_ind = self.word_dict[token]
-                        self.emission[cur_tag_ind][cur_token_ind] += 1
-
-                        # If prev is None, add to initial. Otherwise Add to Transition, based on the previous tag.
-                        if prev_tag is None:
-                            self.initial[cur_tag_ind] += 1
-                        else:
-                            prev_tag_ind = self.pos_dict[prev_tag]
-                            self.transition[prev_tag_ind][cur_tag_ind] += 1
-                        prev_tag = tag
-        # Add a col for <UNK> in self.emission
-        new_col = np.ones([self.emission.shape[0], 1])
-        self.emission = np.append(self.emission, new_col, axis = 1)
-        # Add-k smoothing
-        self.initial += 1
-        self.emission += 1
-        self.transition += 1
-        # Compute probabilities 
-        self.initial = self.initial / self.initial.sum()
-        self.emission = self.emission / self.emission.sum(axis = 1, keepdims = True)
-        self.transition = self.transition / self.transition.sum(axis = 1, keepdims = True)
-        # Validate probabilities sum to one
-        self.__validate_probabilities()
         # Convert to log probabilities
         self.initial = np.log(self.initial)
         self.emission = np.log(self.emission)
@@ -130,12 +91,35 @@ class POSTagger():
     Use v and backpointer to find the best_path.
     '''
     def viterbi(self, sentence):
-        v = None
-        backpointer = None
+        # Convert tokens in the sentence into indices
+        token_indices = [self.word_dict.get(token, self.word_dict[self.UNK]) for token in sentence.split()]
+        if len(token_indices) == 0:
+            return
+        # Initialize v and backpointer
+        num_of_states = len(self.pos_dict)
+        time_steps = len(token_indices)
+        v = np.zeros([num_of_states, time_steps])
+        backpointer = np.zeros([num_of_states, time_steps], dtype = np.int8) - 1
         # initialization step
+        first_token_index = token_indices[0]
+        first_col = np.add(self.initial, self.emission[:, first_token_index])
+        v[:, 0] = first_col
         # recursion step
+        for i in range(1, len(token_indices)):
+            prev_time_step = v[:, 0].reshape(v.shape[0], 1)
+            precursor = np.add(prev_time_step, self.transition)
+            max_prob = np.max(precursor, axis = 0)
+            arg_max = np.argmax(precursor, axis = 0)
+            token_index = token_indices[i]
+            v[:, i] = np.add(max_prob, self.emission[:, token_index])
+            backpointer[:, i] = arg_max
         # termination step
         best_path = []
+        prev_tag = np.argmax(v[:, -1])
+        best_path.insert(0, prev_tag)
+        for i in reversed(range(1, time_steps)):
+            prev_tag = backpointer[prev_tag, i]
+            best_path.insert(0, prev_tag)
         return best_path
 
     '''
@@ -175,8 +159,8 @@ class POSTagger():
 if __name__ == '__main__':
     pos = POSTagger()
     # make sure these point to the right directories
-    pos.train('train')
-    results = pos.test('dev')
-    # pos.train('train_small')
-    # results = pos.test('test_small')
+    # pos.train('train')
+    # results = pos.test('dev')
+    pos.train('train_small')
+    results = pos.test('test_small')
     print('Accuracy:', pos.evaluate(results))
