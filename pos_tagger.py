@@ -7,14 +7,17 @@ from collections import defaultdict
 
 class POSTagger():
 
-    def __init__(self):
+    def __init__(self, k):
         self.pos_dict = {}
+        self.reverse_pos_dict = {}
         self.word_dict = {}
         self.initial = None
         self.transition = None
         self.emission = None
         self.UNK = '<UNK>'
-        self.k = 1
+        self.PREDICTED = 'predicted'
+        self.CORRECT = 'correct'
+        self.k = k
 
     '''
     Trains a supervised hidden Markov model on a training set.
@@ -36,11 +39,14 @@ class POSTagger():
                     for pair in tagged_tokens:
                         # Split the pair by the last occurence of '/'
                         token, tag = pair.rsplit('/', 1)
+                        token = token.lower()
+                        tag = tag.lower()
                         # Add indices for the current token and tag, if has not been added before
                         if not token in self.word_dict:
                             self.word_dict[token] = len(self.word_dict)
                         if not tag in self.pos_dict:
                             self.pos_dict[tag] = len(self.pos_dict)
+                            self.reverse_pos_dict[len(self.reverse_pos_dict)] = tag
         self.word_dict[self.UNK] = len(self.word_dict) # Add UNK
         # Initialize counters
         num_of_tags, num_of_tokens = len(self.pos_dict), len(self.word_dict)
@@ -57,6 +63,8 @@ class POSTagger():
                     prev_tag = None
                     for pair in tagged_tokens:
                         token, tag = pair.rsplit('/', 1)
+                        token = token.lower()
+                        tag = tag.lower()
                         # Count emission, based on the pair
                         cur_tag_ind = self.pos_dict[tag]
                         cur_token_ind = self.word_dict[token]
@@ -72,9 +80,9 @@ class POSTagger():
         for row in self.emission:
             row[self.word_dict[self.UNK]] = 1
         # Add-k smoothing
-        self.initial += 1
-        self.emission += 1
-        self.transition += 1
+        self.initial += self.k
+        self.emission += self.k
+        self.transition += self.k
         # Compute probabilities 
         self.initial = self.initial / self.initial.sum()
         self.emission = self.emission / self.emission.sum(axis = 1, keepdims = True)
@@ -92,6 +100,8 @@ class POSTagger():
     '''
     def viterbi(self, sentence):
         # Convert tokens in the sentence into indices
+        # print(sentence)
+        sentence = sentence.lower()
         token_indices = [self.word_dict.get(token, self.word_dict[self.UNK]) for token in sentence.split()]
         if len(token_indices) == 0:
             return
@@ -99,20 +109,22 @@ class POSTagger():
         num_of_states = len(self.pos_dict)
         time_steps = len(token_indices)
         v = np.zeros([num_of_states, time_steps])
-        backpointer = np.zeros([num_of_states, time_steps], dtype = np.int8) - 1
+        backpointer = np.zeros([num_of_states, time_steps], dtype = np.int32) - 1
         # initialization step
         first_token_index = token_indices[0]
         first_col = np.add(self.initial, self.emission[:, first_token_index])
         v[:, 0] = first_col
         # recursion step
         for i in range(1, len(token_indices)):
-            prev_time_step = v[:, 0].reshape(v.shape[0], 1)
+            prev_time_step = v[:, i - 1].reshape(v.shape[0], 1)
             precursor = np.add(prev_time_step, self.transition)
             max_prob = np.max(precursor, axis = 0)
             arg_max = np.argmax(precursor, axis = 0)
             token_index = token_indices[i]
             v[:, i] = np.add(max_prob, self.emission[:, token_index])
             backpointer[:, i] = arg_max
+        # print(v)
+        # print(backpointer)
         # termination step
         best_path = []
         prev_tag = np.argmax(v[:, -1])
@@ -132,17 +144,44 @@ class POSTagger():
     def test(self, dev_set):
         results = defaultdict(dict)
         # iterate over testing documents
+        next_sent_index = 0
         for root, dirs, files in os.walk(dev_set):
             for name in files:
                 with open(os.path.join(root, name)) as f:
-                    pass
+                    lines = f.readlines()
+                for line in lines:
+                    # Parse correct_tags, as a list
+                    tagged_tokens = line.split()
+                    if not tagged_tokens:
+                        continue
+                    tagged_tokens = [token.rsplit('/', 1) for token in tagged_tokens]
+                    correct_tags = [pair[1] for pair in tagged_tokens]
+                    # Predict tags using token
+                    sentence = " ".join([pair[0] for pair in tagged_tokens])
+                    predicted_tags_indices = self.viterbi(sentence)
+                    predicted_tags = [self.reverse_pos_dict[i] for i in predicted_tags_indices]
+                    # Add correct and predicted tags to results
+                    cur_result = defaultdict(list)
+                    cur_result[self.CORRECT] = correct_tags
+                    cur_result[self.PREDICTED] = predicted_tags
+                    results[next_sent_index] = cur_result
+                    next_sent_index += 1
         return results
 
     '''
     Given results, calculates overall accuracy.
     '''
     def evaluate(self, results):
-        accuracy = 0.0
+        num_total_words = 0.0
+        num_correct_predict = 0.0
+        for _, result in results.items():
+            correct = result[self.CORRECT]
+            predicted = result[self.PREDICTED]
+            for i in range(len(correct)):
+                if correct[i] == predicted[i]:
+                    num_correct_predict += 1
+                num_total_words += 1
+        accuracy = num_correct_predict / num_total_words
         return accuracy
 
     def __validate_probabilities(self):
@@ -157,10 +196,21 @@ class POSTagger():
                 print("Transition probabilities do not sum to one")
 
 if __name__ == '__main__':
-    pos = POSTagger()
-    # make sure these point to the right directories
+    for k in range(1, 100):
+        pos = POSTagger(k)
+        # make sure these point to the right directories
+        pos.train('train')
+        results = pos.test('dev')
+        # pos.train('train_small')
+        # results = pos.test('test_small')
+        with open('record.csv', 'a') as f:
+            accuracy = pos.evaluate(results)
+            f.write(str(k) + ',' + str(accuracy) + '\n')
+        print('Accuracy:', pos.evaluate(results))
+    # pos = POSTagger(1)
+    # # make sure these point to the right directories
     # pos.train('train')
     # results = pos.test('dev')
-    pos.train('train_small')
-    results = pos.test('test_small')
-    print('Accuracy:', pos.evaluate(results))
+    # # pos.train('train_small')
+    # # results = pos.test('test_small')
+    # print('Accuracy:', pos.evaluate(results))
