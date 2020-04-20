@@ -1,7 +1,4 @@
-# Ignore Files
-# *.zip
-# *.pdf
-*
-!*.py
-!*.gitignore
-!README
+.gitignore
+*.pdf
+record.csv
+temp.txt

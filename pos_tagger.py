@@ -7,7 +7,7 @@ from collections import defaultdict
 
 class POSTagger():
 
-    def __init__(self, k):
+    def __init__(self):
         self.pos_dict = {}
         self.reverse_pos_dict = {}
         self.word_dict = {}
@@ -17,7 +17,7 @@ class POSTagger():
         self.UNK = '<UNK>'
         self.PREDICTED = 'predicted'
         self.CORRECT = 'correct'
-        self.k = k
+        self.k = 1
 
     '''
     Trains a supervised hidden Markov model on a training set.
@@ -196,21 +196,10 @@ class POSTagger():
                 print("Transition probabilities do not sum to one")
 
 if __name__ == '__main__':
-    for k in range(1, 100):
-        pos = POSTagger(k)
-        # make sure these point to the right directories
-        pos.train('train')
-        results = pos.test('dev')
-        # pos.train('train_small')
-        # results = pos.test('test_small')
-        with open('record.csv', 'a') as f:
-            accuracy = pos.evaluate(results)
-            f.write(str(k) + ',' + str(accuracy) + '\n')
-        print('Accuracy:', pos.evaluate(results))
-    # pos = POSTagger(1)
-    # # make sure these point to the right directories
-    # pos.train('train')
-    # results = pos.test('dev')
-    # # pos.train('train_small')
-    # # results = pos.test('test_small')
-    # print('Accuracy:', pos.evaluate(results))
+    pos = POSTagger()
+    # make sure these point to the right directories
+    pos.train('train')
+    results = pos.test('dev')
+    # pos.train('train_small')
+    # results = pos.test('test_small')
+    print('Accuracy:', pos.evaluate(results))
